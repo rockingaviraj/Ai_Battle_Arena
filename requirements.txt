@@ -1,0 +1,9 @@
+fastapi
+pydantic
+requests
+pymupdf
+sentence-transformers
+faiss-cpu
+transformers
+torch
+uvicorn

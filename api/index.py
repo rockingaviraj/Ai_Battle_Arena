@@ -9,10 +9,9 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from pdf_reader import read_pdf
 from text_splitter import split_text
-from vector_store import build_index, embedder
+from vector_store import build_index, get_embedder
 from qa_logic import generate_answer
 
-# PDF cache (speed)
 PDF_CACHE = {}
 
 app = FastAPI()
@@ -24,27 +23,26 @@ class InputData(BaseModel):
 @app.post("/aibattle")
 def aibattle(data: InputData):
 
-    # 1️⃣ Empty questions check
-    if not data.questions or len(data.questions) == 0:
+    # 1️⃣ Empty questions
+    if not data.questions:
         return {"answers": []}
 
-    # 2️⃣ PDF download
+    # 2️⃣ Download PDF
     try:
         response = requests.get(data.pdf_url, timeout=10)
         response.raise_for_status()
     except Exception:
         return {"answers": [""] * len(data.questions)}
 
-    # 3️⃣ Cross-platform temp path (Windows + Linux)
+    # 3️⃣ Save PDF (cross-platform)
     pdf_path = os.path.join(tempfile.gettempdir(), "doc.pdf")
-
     try:
         with open(pdf_path, "wb") as f:
             f.write(response.content)
     except Exception:
         return {"answers": [""] * len(data.questions)}
 
-    # 4️⃣ Read PDF (with cache)
+    # 4️⃣ Read PDF (cached)
     try:
         if data.pdf_url in PDF_CACHE:
             text = PDF_CACHE[data.pdf_url]
@@ -54,22 +52,22 @@ def aibattle(data: InputData):
     except Exception:
         return {"answers": [""] * len(data.questions)}
 
-    # 5️⃣ Empty PDF check
-    if not text or len(text.strip()) == 0:
+    if not text.strip():
         return {"answers": [""] * len(data.questions)}
 
-    # 6️⃣ Chunking
+    # 5️⃣ Split text
     chunks = split_text(text)
 
-    # 7️⃣ Build FAISS index
+    # 6️⃣ Build index
     try:
         index = build_index(chunks)
     except Exception:
         return {"answers": [""] * len(data.questions)}
 
     answers = []
+    embedder = get_embedder()
 
-    # 8️⃣ Answer questions safely
+    # 7️⃣ Answer questions
     for q in data.questions:
         try:
             q_vec = embedder.encode([q])
@@ -81,5 +79,4 @@ def aibattle(data: InputData):
         except Exception:
             answers.append("")
 
-    # 9️⃣ Final strict JSON
     return {"answers": answers}

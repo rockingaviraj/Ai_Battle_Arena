@@ -2,17 +2,14 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import requests
 import os, sys
-import numpy as np
 import tempfile
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from pdf_reader import read_pdf
 from text_splitter import split_text
-from vector_store import build_index, get_embedder
+from vector_store import build_index, search
 from qa_logic import generate_answer
-
-PDF_CACHE = {}
 
 app = FastAPI()
 
@@ -23,18 +20,17 @@ class InputData(BaseModel):
 @app.post("/aibattle")
 def aibattle(data: InputData):
 
-    # 1️⃣ Empty questions
     if not data.questions:
         return {"answers": []}
 
-    # 2️⃣ Download PDF
+    # Download PDF
     try:
         response = requests.get(data.pdf_url, timeout=10)
         response.raise_for_status()
     except Exception:
         return {"answers": [""] * len(data.questions)}
 
-    # 3️⃣ Save PDF (cross-platform)
+    # Save PDF
     pdf_path = os.path.join(tempfile.gettempdir(), "doc.pdf")
     try:
         with open(pdf_path, "wb") as f:
@@ -42,38 +38,27 @@ def aibattle(data: InputData):
     except Exception:
         return {"answers": [""] * len(data.questions)}
 
-    # 4️⃣ Read PDF (cached)
+    # Read PDF
     try:
-        if data.pdf_url in PDF_CACHE:
-            text = PDF_CACHE[data.pdf_url]
-        else:
-            text = read_pdf(pdf_path)
-            PDF_CACHE[data.pdf_url] = text
+        text = read_pdf(pdf_path)
     except Exception:
         return {"answers": [""] * len(data.questions)}
 
     if not text.strip():
         return {"answers": [""] * len(data.questions)}
 
-    # 5️⃣ Split text
+    # Split text
     chunks = split_text(text)
 
-    # 6️⃣ Build index
-    try:
-        index = build_index(chunks)
-    except Exception:
-        return {"answers": [""] * len(data.questions)}
+    # Build index
+    vectors = build_index(chunks)
 
     answers = []
-    embedder = get_embedder()
 
-    # 7️⃣ Answer questions
     for q in data.questions:
         try:
-            q_vec = embedder.encode([q])
-            q_vec = np.array(q_vec).astype("float32")
-            _, ids = index.search(q_vec, 1)
-            context = chunks[ids[0][0]]
+            context_chunks = search(vectors, chunks, q, top_k=2)
+            context = " ".join(context_chunks)
             ans = generate_answer(q, context)
             answers.append(ans)
         except Exception:

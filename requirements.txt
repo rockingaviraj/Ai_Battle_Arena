@@ -1,9 +1,6 @@
 fastapi
-pydantic
+uvicorn
 requests
 pymupdf
-sentence-transformers
-faiss-cpu
-transformers
-torch
-uvicorn
+scikit-learn
+numpy

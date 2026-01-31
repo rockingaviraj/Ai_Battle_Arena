@@ -1,24 +1,14 @@
+from sklearn.feature_extraction.text import TfidfVectorizer
 import numpy as np
-import faiss
-from sentence_transformers import SentenceTransformer
-
-# CPU-safe embedding model
-embedder = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
 
 def build_index(chunks):
-    vectors = embedder.encode(chunks)
-    vectors = np.array(vectors).astype("float32")
+    vectorizer = TfidfVectorizer(stop_words="english")
+    vectors = vectorizer.fit_transform(chunks)
+    return (vectorizer, vectors)
 
-    index = faiss.IndexFlatL2(vectors.shape[1])
-    index.add(vectors)
-
-    return (index, vectors)
-
-def search(index_vectors, chunks, query, top_k=3):
-    index, _ = index_vectors
-
-    q_vec = embedder.encode([query])
-    q_vec = np.array(q_vec).astype("float32")
-
-    _, ids = index.search(q_vec, top_k)
-    return [chunks[i] for i in ids[0]]
+def search(index, chunks, query, top_k=2):
+    vectorizer, vectors = index
+    q_vec = vectorizer.transform([query])
+    scores = (vectors @ q_vec.T).toarray().ravel()
+    top_ids = scores.argsort()[-top_k:][::-1]
+    return [chunks[i] for i in top_ids]

@@ -57,8 +57,8 @@ def aibattle(data: InputData):
 
     for q in data.questions:
         try:
-            context_chunks = search(vectors, chunks, q, top_k=2)
-            context = " ".join(context_chunks)
+           context_chunks = search(vectors, chunks, q, top_k=3)
+            context = " ".join(context_chunks)[:1200]
             ans = generate_answer(q, context)
             answers.append(ans)
         except Exception:

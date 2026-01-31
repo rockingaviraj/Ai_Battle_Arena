@@ -1,18 +1,24 @@
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
+import faiss
+from sentence_transformers import SentenceTransformer
 
-vectorizer = TfidfVectorizer(
-    stop_words="english",
-    max_features=5000
-)
+# CPU-safe embedding model
+embedder = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
 
 def build_index(chunks):
-    vectors = vectorizer.fit_transform(chunks)
-    return vectors
+    vectors = embedder.encode(chunks)
+    vectors = np.array(vectors).astype("float32")
 
-def search(vectors, chunks, query, top_k=2):
-    q_vec = vectorizer.transform([query])
-    scores = cosine_similarity(q_vec, vectors)[0]
-    top_ids = np.argsort(scores)[-top_k:][::-1]
-    return [chunks[i] for i in top_ids]
+    index = faiss.IndexFlatL2(vectors.shape[1])
+    index.add(vectors)
+
+    return (index, vectors)
+
+def search(index_vectors, chunks, query, top_k=3):
+    index, _ = index_vectors
+
+    q_vec = embedder.encode([query])
+    q_vec = np.array(q_vec).astype("float32")
+
+    _, ids = index.search(q_vec, top_k)
+    return [chunks[i] for i in ids[0]]

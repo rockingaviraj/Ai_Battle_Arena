@@ -1,23 +1,17 @@
 def generate_answer(question, context):
     """
-    Stable and deterministic answer generation
-    optimized for automated evaluation systems.
+    Stable, deterministic answer generation
+    for AI-based automated evaluation.
     """
 
     if not context:
         return ""
 
-    # Remove noisy tokens if present
+    # remove noisy tokens
     for token in ["<pad>", "<EOS>"]:
         context = context.replace(token, "")
 
-    # Normalize whitespace
     answer = context.replace("\n", " ").strip()
 
-    # Hard cap to avoid overly long responses
-    MAX_LEN = 700
-    if len(answer) > MAX_LEN:
-        answer = answer[:MAX_LEN]
-
-    return answer
-
+    # hard length cap
+    return answer[:700]

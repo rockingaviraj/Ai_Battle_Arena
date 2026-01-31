@@ -1,24 +1,68 @@
-import numpy as np
-from sentence_transformers import SentenceTransformer
-import faiss
+from fastapi import FastAPI
+from pydantic import BaseModel
+import requests
+import os, sys
+import tempfile
 
-# Lightweight embedding model (CPU safe)
-embedder = SentenceTransformer("all-MiniLM-L6-v2", device="cpu")
+# allow root imports
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-def build_index(chunks):
-    vectors = embedder.encode(chunks)
-    vectors = np.array(vectors).astype("float32")
+from pdf_reader import read_pdf
+from text_splitter import split_text
+from vector_store import build_index, search
+from qa_logic import generate_answer
 
-    index = faiss.IndexFlatL2(vectors.shape[1])
-    index.add(vectors)
+app = FastAPI()
 
-    return index, vectors
+class InputData(BaseModel):
+    pdf_url: str
+    questions: list
 
-def search(index_vectors, chunks, query, top_k=3):
-    index, vectors = index_vectors
+@app.post("/aibattle")
+def aibattle(data: InputData):
 
-    q_vec = embedder.encode([query])
-    q_vec = np.array(q_vec).astype("float32")
+    if not data.questions:
+        return {"answers": []}
 
-    _, ids = index.search(q_vec, top_k)
-    return [chunks[i] for i in ids[0]]
+    # Download PDF
+    try:
+        response = requests.get(data.pdf_url, timeout=10)
+        response.raise_for_status()
+    except Exception:
+        return {"answers": [""] * len(data.questions)}
+
+    # Save PDF to temp
+    pdf_path = os.path.join(tempfile.gettempdir(), "doc.pdf")
+    try:
+        with open(pdf_path, "wb") as f:
+            f.write(response.content)
+    except Exception:
+        return {"answers": [""] * len(data.questions)}
+
+    # Read PDF
+    try:
+        text = read_pdf(pdf_path)
+    except Exception:
+        return {"answers": [""] * len(data.questions)}
+
+    if not text.strip():
+        return {"answers": [""] * len(data.questions)}
+
+    # Split text
+    chunks = split_text(text)
+
+    # Build index (FAISS + vectors)
+    index_vectors = build_index(chunks)
+
+    answers = []
+
+    for q in data.questions:
+        try:
+            context_chunks = search(index_vectors, chunks, q, top_k=3)
+            context = " ".join(context_chunks)[:1200]
+            ans = generate_answer(q, context)
+            answers.append(ans)
+        except Exception:
+            answers.append("")
+
+    return {"answers": answers}

@@ -1,12 +1,8 @@
-import fitz
+import fitz  # PyMuPDF
 
 def read_pdf(pdf_path):
     doc = fitz.open(pdf_path)
     text = ""
-
-    for i, page in enumerate(doc):
-        if i == 0:
-            continue   # 👈 first page skip
+    for page in doc:
         text += page.get_text()
-
     return text

@@ -4,7 +4,6 @@ import requests
 import os, sys
 import tempfile
 
-# allow root imports
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from pdf_reader import read_pdf
@@ -31,13 +30,10 @@ def aibattle(data: InputData):
     except Exception:
         return {"answers": [""] * len(data.questions)}
 
-    # Save PDF to temp
+    # Save PDF
     pdf_path = os.path.join(tempfile.gettempdir(), "doc.pdf")
-    try:
-        with open(pdf_path, "wb") as f:
-            f.write(response.content)
-    except Exception:
-        return {"answers": [""] * len(data.questions)}
+    with open(pdf_path, "wb") as f:
+        f.write(response.content)
 
     # Read PDF
     try:
@@ -51,15 +47,15 @@ def aibattle(data: InputData):
     # Split text
     chunks = split_text(text)
 
-    # Build index (FAISS + vectors)
-    index_vectors = build_index(chunks)
+    # Build vectors
+    vectors = build_index(chunks)
 
     answers = []
 
     for q in data.questions:
         try:
-            context_chunks = search(index_vectors, chunks, q, top_k=3)
-            context = " ".join(context_chunks)[:1200]
+            context_chunks = search(vectors, chunks, q, top_k=2)
+            context = " ".join(context_chunks)
             ans = generate_answer(q, context)
             answers.append(ans)
         except Exception:
